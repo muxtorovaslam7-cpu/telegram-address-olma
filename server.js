@@ -34,7 +34,7 @@ function readAddresses() {
 function writeAddresses(list) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(list, null, 2), "utf-8");
 }
-
+const DATA_DIR = path.join(__dirname, "data"); if (!fs.existsSync(DATA_DIR)) { fs.mkdirSync(DATA_DIR, { recursive: true }); }
 if (!fs.existsSync(DATA_FILE)) {
   writeAddresses([]);
 }
