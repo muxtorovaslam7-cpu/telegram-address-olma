@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manzillar ro'yxati</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #2a2f3a;
+    --text: #e8eaed;
+    --muted: #9aa1ac;
+    --accent: #4f8cff;
+    --accent2: #2fbf71;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=text] {
+    flex: 1;
+    min-width: 180px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #10131a;
+    color: var(--text);
+    font-size: 14px;
+  }
+  button {
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: #2a2f3a; }
+  .count {
+    display: inline-block;
+    background: var(--accent2);
+    color: #04150b;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    margin-left: 8px;
+  }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  li:last-child { border-bottom: none; }
+  .addr-text { font-size: 14px; line-height: 1.4; }
+  .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .tag {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    margin-right: 6px;
+  }
+  .tag.tg { background: #1d3a5f; color: #7fb3ff; }
+  .tag.manual { background: #33301d; color: #e8d17f; }
+  .del {
+    background: none;
+    border: none;
+    color: #ff6b6b;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px 8px;
+  }
+  .empty { color: var(--muted); text-align: center; padding: 30px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Manzillar ro'yxati <span class="count" id="count">0</span></h1>
+  <div class="sub">Qo'lda kiritilgan va Telegram orqali kelgan manzillar</div>
+
+  <div class="card">
+    <form id="addForm">
+      <input type="text" id="addressInput" placeholder="Yangi manzilni kiriting..." required>
+      <input type="text" id="authorInput" placeholder="Ismingiz (ixtiyoriy)" style="max-width:160px">
+      <button type="submit">Qo'shish</button>
+      <button type="button" class="secondary" id="useLocationBtn">📍 Joriy joyim</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <ul id="list"></ul>
+    <div class="empty" id="emptyMsg" style="display:none">Hozircha manzillar yo'q</div>
+  </div>
+</div>
+
+<script>
+const listEl = document.getElementById('list');
+const countEl = document.getElementById('count');
+const emptyMsg = document.getElementById('emptyMsg');
+
+async function loadAddresses() {
+  const res = await fetch('/api/addresses');
+  const data = await res.json();
+  render(data);
+}
+
+function render(items) {
+  countEl.textContent = items.length;
+  listEl.innerHTML = '';
+  emptyMsg.style.display = items.length === 0 ? 'block' : 'none';
+  items.forEach(item => {
+    const li = document.createElement('li');
+    const tagClass = item.source === 'manual' ? 'manual' : 'tg';
+    const tagText = item.source === 'manual' ? "Qo'lda" : 'Telegram';
+    const date = new Date(item.createdAt).toLocaleString('uz-UZ');
+    li.innerHTML = `
+      <div>
+        <span class="tag ${tagClass}">${tagText}</span>
+        <div class="addr-text">${escapeHtml(item.address)}</div>
+        <div class="meta">${escapeHtml(item.author || '')} • ${date}</div>
+      </div>
+      <button class="del" data-id="${item.id}">✕</button>
+    `;
+    listEl.appendChild(li);
+  });
+  document.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await fetch('/api/addresses/' + btn.dataset.id, { method: 'DELETE' });
+      loadAddresses();
+    });
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+document.getElementById('addForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const address = document.getElementById('addressInput').value;
+  const author = document.getElementById('authorInput').value;
+  await fetch('/api/addresses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address, author })
+  });
+  document.getElementById('addressInput').value = '';
+  loadAddresses();
+});
+
+document.getElementById('useLocationBtn').addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    alert("Brauzeringiz geolokatsiyani qo'llab-quvvatlamaydi");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude } = pos.coords;
+    const address = `Koordinata: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    const author = document.getElementById('authorInput').value;
+    await fetch('/api/addresses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, author })
+    });
+    loadAddresses();
+  }, () => alert("Joylashuvni aniqlab bo'lmadi"));
+});
+
+// Ro'yxatni har 5 soniyada yangilab turish (Telegramdan kelgan yangi
+// manzillar avtomatik ko'rinishi uchun)
+loadAddresses();
+setInterval(loadAddresses, 5000);
+</script>
+</body>
+</html>
