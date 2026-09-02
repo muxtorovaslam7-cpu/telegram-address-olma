@@ -1,0 +1,16 @@
+{
+  "name": "telegram-address-book",
+  "version": "1.0.0",
+  "description": "Telegramdan geolokatsiya qabul qiluvchi va manzillar ro'yxatini ko'rsatuvchi sayt",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
