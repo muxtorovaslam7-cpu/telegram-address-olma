@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Do'konlar xaritasi</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #2a2f3a;
+    --text: #e8eaed;
+    --muted: #9aa1ac;
+    --accent: #4f8cff;
+    --accent2: #2fbf71;
+    --danger: #ff5b5b;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  .count {
+    background: var(--accent2);
+    color: #04150b;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    margin-left: 8px;
+  }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button.secondary { background: #2a2f3a; }
+  button:hover { opacity: 0.9; }
+  select#langSelect {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #10131a;
+    color: var(--text);
+    font-size: 13px;
+  }
+  #map { flex: 1; width: 100%; min-height: 400px; background: #1a1d24; }
+
+  /* Leaflet popup ni tema bilan moslashtirish */
+  .leaflet-popup-content-wrapper {
+    background: var(--card);
+    color: var(--text);
+    border-radius: 10px;
+  }
+  .leaflet-popup-tip { background: var(--card); }
+  .popup-title { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  .popup-meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .popup-dist { font-size: 13px; margin-bottom: 8px; }
+  .popup-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .popup-actions a, .popup-actions button {
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-route { background: var(--accent); color: white; }
+  .btn-del { background: var(--danger); color: white; border: none; cursor: pointer; }
+
+  /* Qizil belgi - raqam ichida */
+  .red-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    padding: 0 8px;
+    background: #ff3b3b;
+    border: 3px solid #fff;
+    border-radius: 17px;
+    box-shadow: 0 0 10px rgba(255,59,59,0.9);
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="headerTitle">Do'konlar xaritasi <span class="count" id="count">0</span></h1>
+  <div class="controls">
+    <select id="langSelect">
+      <option value="uz">O'zbekcha</option>
+      <option value="ru">Русский</option>
+      <option value="en">English</option>
+      <option value="kk">Қазақша</option>
+      <option value="ky">Кыргызча</option>
+      <option value="tk">Türkmençe</option>
+      <option value="tg">Тоҷикӣ</option>
+    </select>
+    <button class="secondary" id="myLocBtn">📍 Mening joyim</button>
+  </div>
+</header>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// --- Tarjimalar ---
+const translations = {
+  uz: {
+    headerTitle: "Do'konlar xaritasi",
+    myLocationBtn: "📍 Mening joyim",
+    distancePrompt: "Masofani ko'rish uchun joylashuvga ruxsat bering",
+    distanceLabel: "To'g'ri chiziq",
+    routeBtn: "🧭 Yo'nalish (Google Maps)",
+    deleteBtn: "✕ O'chirish",
+    confirmDelete: (num) => `Do'kon ${num} o'chirilsinmi?`,
+    geoNotSupported: "Brauzeringiz geolokatsiyani qo'llab-quvvatlamaydi",
+    geoDenied: "Joylashuvni aniqlab bo'lmadi",
+    youAreHere: "📍 Siz shu yerdasiz",
+    shopLabelPrefix: "🏪 Do'kon ",
+  },
+  ru: {
+    headerTitle: "Карта магазинов",
+    myLocationBtn: "📍 Моё местоположение",
+    distancePrompt: "Разрешите доступ к геолокации, чтобы увидеть расстояние",
+    distanceLabel: "Расстояние по прямой",
+    routeBtn: "🧭 Маршрут (Google Maps)",
+    deleteBtn: "✕ Удалить",
+    confirmDelete: (num) => `Удалить магазин ${num}?`,
+    geoNotSupported: "Ваш браузер не поддерживает геолокацию",
+    geoDenied: "Не удалось определить местоположение",
+    youAreHere: "📍 Вы здесь",
+    shopLabelPrefix: "🏪 Магазин ",
+  },
+  en: {
+    headerTitle: "Shops Map",
+    myLocationBtn: "📍 My location",
+    distancePrompt: "Allow location access to see distance",
+    distanceLabel: "Straight-line distance",
+    routeBtn: "🧭 Directions (Google Maps)",
+    deleteBtn: "✕ Delete",
+    confirmDelete: (num) => `Delete shop ${num}?`,
+    geoNotSupported: "Your browser doesn't support geolocation",
+    geoDenied: "Could not determine your location",
+    youAreHere: "📍 You are here",
+    shopLabelPrefix: "🏪 Shop ",
+  },
+  kk: {
+    headerTitle: "Дүкендер картасы",
+    myLocationBtn: "📍 Менің орналасуым",
+    distancePrompt: "Қашықтықты көру үшін геолокацияға рұқсат беріңіз",
+    distanceLabel: "Тік сызық қашықтығы",
+    routeBtn: "🧭 Бағыт (Google Maps)",
+    deleteBtn: "✕ Жою",
+    confirmDelete: (num) => `${num} дүкенін жою керек пе?`,
+    geoNotSupported: "Браузеріңіз геолокацияны қолдамайды",
+    geoDenied: "Орналасуды анықтау мүмкін болмады",
+    youAreHere: "📍 Сіз осындасыз",
+    shopLabelPrefix: "🏪 Дүкен ",
+  },
+  ky: {
+    headerTitle: "Дүкөндөр картасы",
+    myLocationBtn: "📍 Менин жайгашкан жерим",
+    distancePrompt: "Аралыкты көрүү үчүн геолокацияга уруксат бериңиз",
+    distanceLabel: "Түз сызык аралыгы",
+    routeBtn: "🧭 Багыт (Google Maps)",
+    deleteBtn: "✕ Өчүрүү",
+    confirmDelete: (num) => `${num} дүкөнүн өчүрөсүзбү?`,
+    geoNotSupported: "Сиздин браузер геолокацияны колдобойт",
+    geoDenied: "Жайгашкан жерди аныктоо мүмкүн болгон жок",
+    youAreHere: "📍 Сиз ушул жердесиз",
+    shopLabelPrefix: "🏪 Дүкөн ",
+  },
+  tk: {
+    headerTitle: "Dükanlar kartasy",
+    myLocationBtn: "📍 Meniň ýerleşişim",
+    distancePrompt: "Aralygy görmek üçin ýerleşiş rugsadyny beriň",
+    distanceLabel: "Göni çyzyk aralygy",
+    routeBtn: "🧭 Ugur (Google Maps)",
+    deleteBtn: "✕ Poz",
+    confirmDelete: (num) => `${num} dükany pozulsynmy?`,
+    geoNotSupported: "Brauzeriňiz geolokasiýany goldamaýar",
+    geoDenied: "Ýerleşişi anyklap bolmady",
+    youAreHere: "📍 Siz şu ýerde",
+    shopLabelPrefix: "🏪 Dükan ",
+  },
+  tg: {
+    headerTitle: "Харитаи мағозаҳо",
+    myLocationBtn: "📍 Ҷойгиршавии ман",
+    distancePrompt: "Барои дидани масофа ба ҷойгиршавӣ иҷозат диҳед",
+    distanceLabel: "Масофаи хати рост",
+    routeBtn: "🧭 Роҳ (Google Maps)",
+    deleteBtn: "✕ Нест кардан",
+    confirmDelete: (num) => `Мағозаи ${num} нест карда шавад?`,
+    geoNotSupported: "Браузери шумо геолокатсияро дастгирӣ намекунад",
+    geoDenied: "Ҷойгиршавӣ муайян нашуд",
+    youAreHere: "📍 Шумо дар ин ҷо ҳастед",
+    shopLabelPrefix: "🏪 Мағозаи ",
+  },
+};
+
+let currentLang = localStorage.getItem('lang') || 'uz';
+
+function t() {
+  return translations[currentLang] || translations.uz;
+}
+
+function applyStaticTexts() {
+  document.getElementById('headerTitle').childNodes[0].textContent = t().headerTitle + ' ';
+  document.getElementById('myLocBtn').textContent = t().myLocationBtn;
+  document.getElementById('langSelect').value = currentLang;
+}
+
+document.getElementById('langSelect').addEventListener('change', (e) => {
+  currentLang = e.target.value;
+  localStorage.setItem('lang', currentLang);
+  applyStaticTexts();
+});
+
+// --- Xarita ---
+const map = L.map('map', { zoomControl: true }).setView([41.311081, 69.240562], 12);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+let markersLayer = L.layerGroup().addTo(map);
+let userPos = null;
+
+const countEl = document.getElementById('count');
+const myLocBtn = document.getElementById('myLocBtn');
+
+function redIcon(label) {
+  const width = Math.max(34, 22 + label.length * 9);
+  return L.divIcon({
+    className: '',
+    html: `<div class="red-badge">${label}</div>`,
+    iconSize: [width, 34],
+    iconAnchor: [width / 2, 17],
+  });
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function getUserLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
+}
+
+async function buildPopupContent(shop) {
+  const container = document.createElement('div');
+  const dict = t();
+  const date = new Date(shop.updatedAt).toLocaleString();
+
+  let distanceHtml = `<div class="popup-dist">${dict.distancePrompt}</div>`;
+
+  if (!userPos) {
+    userPos = await getUserLocation();
+  }
+
+  if (userPos) {
+    const straightKm = haversineKm(userPos.lat, userPos.lng, shop.lat, shop.lng);
+    distanceHtml = `<div class="popup-dist">📏 ${dict.distanceLabel}: ~${straightKm.toFixed(2)} km</div>`;
+  }
+
+  const gmapsUrl = userPos
+    ? `https://www.google.com/maps/dir/?api=1&origin=${userPos.lat},${userPos.lng}&destination=${shop.lat},${shop.lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${shop.lat},${shop.lng}`;
+
+  container.innerHTML = `
+    <div class="popup-title">${dict.shopLabelPrefix}${escapeHtml(shop.number)}</div>
+    <div class="popup-meta">${escapeHtml(shop.author || '')} • ${date}</div>
+    ${distanceHtml}
+    <div class="popup-actions">
+      <a class="btn-route" href="${gmapsUrl}" target="_blank" rel="noopener">${dict.routeBtn}</a>
+      <button class="btn-del" data-number="${escapeHtml(shop.number)}">${dict.deleteBtn}</button>
+    </div>
+  `;
+
+  container.querySelector('.btn-del').addEventListener('click', async (e) => {
+    const num = e.target.dataset.number;
+    if (confirm(t().confirmDelete(num))) {
+      await fetch('/api/shops/' + encodeURIComponent(num), { method: 'DELETE' });
+      loadShops();
+    }
+  });
+
+  return container;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function loadShops() {
+  const res = await fetch('/api/shops');
+  const shops = await res.json();
+  countEl.textContent = shops.length;
+
+  markersLayer.clearLayers();
+  shops.forEach(shop => {
+    const marker = L.marker([shop.lat, shop.lng], { icon: redIcon(escapeHtml(shop.number)) });
+    marker.on('click', async () => {
+      const content = await buildPopupContent(shop);
+      marker.bindPopup(content).openPopup();
+    });
+    marker.addTo(markersLayer);
+  });
+}
+
+myLocBtn.addEventListener('click', async () => {
+  const pos = await getUserLocation();
+  if (!pos) {
+    alert(t().geoDenied);
+    return;
+  }
+  userPos = pos;
+  map.setView([pos.lat, pos.lng], 15);
+  L.circleMarker([pos.lat, pos.lng], {
+    radius: 8,
+    color: '#4f8cff',
+    fillColor: '#4f8cff',
+    fillOpacity: 0.8
+  }).addTo(map).bindPopup(t().youAreHere).openPopup();
+});
+
+applyStaticTexts();
+loadShops();
+setInterval(loadShops, 8000);
+</script>
+</body>
+</html>
